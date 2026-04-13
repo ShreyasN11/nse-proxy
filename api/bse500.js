@@ -1,17 +1,34 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 
-const fetchBSE500Historical = async () => {
+export default async function handler(req, res) {
   try {
     const url = "https://www.bseindia.com/indices/IndexArchiveData.html";
 
+    // Get query params or default
+    const from = req.query.from || "01/01/2024";
+    const to = req.query.to || "31/01/2024";
+
     const params = new URLSearchParams({
-      fmdt: "01/01/2024",   // FROM DATE (dd/mm/yyyy)
-      todt: "31/01/2024",   // TO DATE
+      fmdt: from,
+      todt: to,
       index: "BSE500"
     });
 
-    const response = await axios.post(url, params, {
+    // Create axios instance (for cookies)
+    const instance = axios.create({
+      withCredentials: true
+    });
+
+    // Step 1: hit homepage to get cookies
+    await instance.get("https://www.bseindia.com", {
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
+    });
+
+    // Step 2: actual POST request
+    const response = await instance.post(url, params, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0",
@@ -19,12 +36,9 @@ const fetchBSE500Historical = async () => {
       }
     });
 
-    const html = response.data;
-    const $ = cheerio.load(html);
-
+    const $ = cheerio.load(response.data);
     const result = [];
 
-    // Find table rows
     $("table tr").each((i, el) => {
       const cols = $(el).find("td");
 
@@ -37,23 +51,24 @@ const fetchBSE500Historical = async () => {
           close: $(cols[4]).text().trim()
         };
 
-        // Skip header or empty rows
         if (row.date && row.date !== "Date") {
           result.push(row);
         }
       }
     });
 
-    return result;
+    return res.status(200).json({
+      success: true,
+      count: result.length,
+      data: result
+    });
 
   } catch (error) {
     console.error("Error fetching BSE 500 data:", error.message);
-    return [];
-  }
-};
 
-// Run
-fetchBSE500Historical().then(data => {
-  console.log("BSE 500 Historical Data:");
-  console.log(data.slice(0, 5)); // first 5 rows
-});
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
