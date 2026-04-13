@@ -4,33 +4,37 @@ export default async function handler(req, res) {
   try {
     const symbol = (req.query.symbol || "MASTEK").toUpperCase();
 
-    const headers = {
+    const commonHeaders = {
       "User-Agent": "Mozilla/5.0",
       "Accept": "application/json",
-      "Referer": `${BASE_URL}/get-quote/equity/${symbol}`,
       "Accept-Language": "en-US,en;q=0.9",
       "Connection": "keep-alive",
     };
 
-    // ✅ Step 1: Establish session (same as your working code)
-    const session = await fetch(`${BASE_URL}/api/marketStatus`, {
-      headers
+    // ✅ Step 1: Get full cookies
+    const session = await fetch(`${BASE_URL}/`, {
+      headers: commonHeaders,
     });
 
-    const cookies = session.headers.get("set-cookie");
+    const rawCookies = session.headers.raw()["set-cookie"];
 
-    if (!cookies) {
-      return res.status(500).json({ error: "Failed to establish NSE session" });
+    if (!rawCookies) {
+      return res.status(500).json({ error: "No cookies received" });
     }
+
+    // ✅ Combine cookies properly
+    const cookies = rawCookies.map(c => c.split(";")[0]).join("; ");
 
     // ✅ Step 2: Fetch corporate actions
     const url = `${BASE_URL}/api/corporates-corporateActions?index=equities&symbol=${symbol}`;
 
     const response = await fetch(url, {
       headers: {
-        ...headers,
-        Cookie: cookies,
-      }
+        ...commonHeaders,
+        "Referer":
+          "https://www.nseindia.com/companies-listing/corporate-filings-actions",
+        "Cookie": cookies,
+      },
     });
 
     if (!response.ok) {
