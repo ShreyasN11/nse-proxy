@@ -8,35 +8,40 @@ export default async function handler(req, res) {
       "User-Agent": "Mozilla/5.0",
       "Accept": "application/json",
       "Referer": `${BASE_URL}/get-quote/equity/${symbol}`,
+      "Accept-Language": "en-US,en;q=0.9",
+      "Connection": "keep-alive",
     };
 
-    // ✅ Step 1: Get cookies
-    const homeRes = await fetch(BASE_URL, { headers });
-    const cookies = homeRes.headers.get("set-cookie");
+    // ✅ Step 1: Establish session (same as your working code)
+    const session = await fetch(`${BASE_URL}/api/marketStatus`, {
+      headers
+    });
+
+    const cookies = session.headers.get("set-cookie");
 
     if (!cookies) {
-      return res.status(500).json({ error: "Failed to get NSE cookies" });
+      return res.status(500).json({ error: "Failed to establish NSE session" });
     }
 
     // ✅ Step 2: Fetch corporate actions
-    const apiUrl = `${BASE_URL}/api/corporates-corporateActions?index=equities&symbol=${symbol}`;
+    const url = `${BASE_URL}/api/corporates-corporateActions?index=equities&symbol=${symbol}`;
 
-    const apiRes = await fetch(apiUrl, {
+    const response = await fetch(url, {
       headers: {
         ...headers,
         Cookie: cookies,
-      },
+      }
     });
 
-    if (!apiRes.ok) {
-      const text = await apiRes.text();
-      return res.status(apiRes.status).json({
-        error: "NSE API failed",
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(response.status).json({
+        error: "Corporate actions fetch failed",
         details: text,
       });
     }
 
-    const data = await apiRes.json();
+    const data = await response.json();
 
     return res.status(200).json({
       symbol,
@@ -44,8 +49,8 @@ export default async function handler(req, res) {
       data: data?.data || [],
     });
 
-  } catch (error) {
-    console.error("Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 }
