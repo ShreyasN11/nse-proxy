@@ -4,46 +4,41 @@ export default async function handler(req, res) {
   try {
     const symbol = (req.query.symbol || "MASTEK").toUpperCase();
 
-    const commonHeaders = {
+    const headers = {
       "User-Agent": "Mozilla/5.0",
       "Accept": "application/json",
       "Accept-Language": "en-US,en;q=0.9",
       "Connection": "keep-alive",
     };
 
-    // ✅ Step 1: Get full cookies
-    const session = await fetch(`${BASE_URL}/`, {
-      headers: commonHeaders,
-    });
+    // ✅ Step 1: Get cookies
+    const session = await fetch(`${BASE_URL}/`, { headers });
 
-    const rawCookies = session.headers.raw()["set-cookie"];
+    const cookieHeader = session.headers.get("set-cookie");
 
-    if (!rawCookies) {
+    if (!cookieHeader) {
       return res.status(500).json({ error: "No cookies received" });
     }
 
-    // ✅ Combine cookies properly
-    const cookies = rawCookies.map(c => c.split(";")[0]).join("; ");
+    const cookies = cookieHeader
+      .split(",")
+      .map(c => c.split(";")[0])
+      .join("; ");
+
+    // Optional delay (helps NSE sometimes)
+    await new Promise(r => setTimeout(r, 300));
 
     // ✅ Step 2: Fetch corporate actions
     const url = `${BASE_URL}/api/corporates-corporateActions?index=equities&symbol=${symbol}`;
 
     const response = await fetch(url, {
       headers: {
-        ...commonHeaders,
+        ...headers,
         "Referer":
           "https://www.nseindia.com/companies-listing/corporate-filings-actions",
         "Cookie": cookies,
       },
     });
-
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(response.status).json({
-        error: "Corporate actions fetch failed",
-        details: text,
-      });
-    }
 
     const data = await response.json();
 
@@ -54,7 +49,6 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error(err);
     return res.status(500).json({ error: err.message });
   }
 }
